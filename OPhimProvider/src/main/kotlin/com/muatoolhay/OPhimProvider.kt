@@ -21,6 +21,9 @@ class OPhimProvider(val plugin: TestPlugin) : MainAPI() {
     override val hasMainPage = true
     override val hasDownloadSupport = false
 
+    val movieUrl = "movies/danh-sach/phim-bo";
+    val tvSeriesUrl = "movies/danh-sach/phim-bo";
+
     private suspend fun request(url: String): NiceResponse {
         return app.get(url)
     }
@@ -71,11 +74,11 @@ class OPhimProvider(val plugin: TestPlugin) : MainAPI() {
                     Episode(data = dataUrl, name = episode.name, posterUrl = movie.posterUrl)
                 }
 
-                return newTvSeriesLoadResponse(movie.name, movie.slug, TvType.TvSeries, episodes) {
+                return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodes) {
                     this.plot = movie.content
                     this.year = movie.publishYear
                     this.tags = movie.categories.mapNotNull { category -> category.name }
-                    this.recommendations = el.getMoviesList("${mainUrl}/movies/danh-sach/phim-bo", 1)
+                    this.recommendations = el.getMoviesList("${mainUrl}/${tvSeriesUrl}", 1)
                     addPoster(movie.posterUrl)
                     addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
                 }
@@ -90,7 +93,7 @@ class OPhimProvider(val plugin: TestPlugin) : MainAPI() {
                 this.plot = movie.content
                 this.year = movie.publishYear
                 this.tags = movie.categories.mapNotNull { category -> category.name }
-                this.recommendations = el.getMoviesList("${mainUrl}/movies/danh-sach/phim-le", 1)
+                this.recommendations = el.getMoviesList("${mainUrl}/${movieUrl}", 1)
                 addPoster(movie.posterUrl)
                 addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
             }

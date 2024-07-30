@@ -17,6 +17,10 @@ This template includes 1 example plugin.
    - Windows: `.\gradlew.bat ExampleProvider:make` or `.\gradlew.bat ExampleProvider:deployWithAdb`
    - Linux & Mac: `./gradlew ExampleProvider:make` or `./gradlew ExampleProvider:deployWithAdb`
 
+## Builds
+
+`./gradlew make makePluginsJson`
+
 ## License
 
 Everything in this repo is released into the public domain. You may use it however you want with no conditions whatsoever

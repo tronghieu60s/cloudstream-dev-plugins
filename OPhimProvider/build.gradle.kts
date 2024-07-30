@@ -7,11 +7,10 @@ cloudstream {
     language = "vi"
     description = "MuaToolHay"
 
-    tvTypes = listOf("Movie")
+    tvTypes = listOf("Movie", "TvSeries")
 
+    iconUrl = "https://raw.githubusercontent.com/muatoolhay/cloudstream/main/vn_icon.png"
     requiresResources = true
-
-    iconUrl = "https://ophim17.cc/logo-ophim-6.png"
 }
 
 android {
