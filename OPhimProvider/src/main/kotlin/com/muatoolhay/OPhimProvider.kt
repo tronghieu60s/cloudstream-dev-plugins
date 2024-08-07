@@ -11,7 +11,7 @@ import com.lagradost.nicehttp.NiceResponse
 class OPhimProvider(val plugin: TestPlugin) : MainAPI() {
     override var lang = "vi"
     override var name = "Ổ Phim"
-    override var mainUrl = "https://api-movies-gateway.vercel.app/api/ophim"
+    override var mainUrl = "https://mth-cloudstream.vercel.app/api/ophim"
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
@@ -25,7 +25,11 @@ class OPhimProvider(val plugin: TestPlugin) : MainAPI() {
     val tvSeriesUrl = "movies/danh-sach/phim-bo";
 
     private suspend fun request(url: String): NiceResponse {
-        return app.get(url)
+        val headers: Map<String, String> = mapOf(
+            "Content-Type" to "application/json",
+            "Authorization" to "Bearer Dghb6eXKon9VsEigqhatqCbo4COpXY8wgoBCmuj33KGyc77XnWw8xdGs5b81vk2L"
+        )
+        return app.get(url, headers = headers)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -108,7 +112,7 @@ class OPhimProvider(val plugin: TestPlugin) : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val text = app.get(data).text
+        val text = request(data).text
         val episode = tryParseJson<ResponseData<MoviesEpisodeResponse>>(text)?.data!!
 
         val episodes = episode.episodes
