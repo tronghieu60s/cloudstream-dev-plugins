@@ -6,12 +6,12 @@ import android.content.Context
 import androidx.appcompat.app.AppCompatActivity
 
 @CloudstreamPlugin
-class OPhimPlugin: Plugin() {
+class KKPhimPlugin: Plugin() {
     var activity: AppCompatActivity? = null
 
     override fun load(context: Context) {
         activity = context as AppCompatActivity
         // All providers should be added in this manner
-        registerMainAPI(OPhimProvider(this))
+        registerMainAPI(KKPhimProvider(this))
     }
 }

@@ -8,14 +8,14 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.nicehttp.NiceResponse
 
-class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
+class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
     override var lang = "vi"
-    override var name = "Ổ Phim"
-    override var mainUrl = "https://mth-cloudstream.vercel.app/api/ophim"
+    override var name = "KK Phim"
+    override var mainUrl = "https://mth-cloudstream.vercel.app/api/kkphim"
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
-        Pair("${mainUrl}/list", "Ổ Phim"),
+        Pair("${mainUrl}/list", "KK Phim"),
     )
 
     override val hasMainPage = true
