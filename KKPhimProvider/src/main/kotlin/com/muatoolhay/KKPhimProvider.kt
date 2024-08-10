@@ -21,7 +21,7 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
     override val hasMainPage = true
     override val hasDownloadSupport = false
 
-    val movieUrl = "movies/danh-sach/phim-bo";
+    val movieUrl = "movies/danh-sach/phim-le";
     val tvSeriesUrl = "movies/danh-sach/phim-bo";
 
     private suspend fun request(url: String): NiceResponse {

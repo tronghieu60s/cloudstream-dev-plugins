@@ -8,20 +8,20 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.nicehttp.NiceResponse
 
-class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
+class AnimeHayProvider(val plugin: AnimeHayPlugin) : MainAPI() {
     override var lang = "vi"
-    override var name = "Ổ Phim"
-    override var mainUrl = "https://mth-cloudstream.vercel.app/api/ophim"
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+    override var name = "Anime Hay"
+    override var mainUrl = "https://mth-cloudstream.vercel.app/api/animehay"
+    override val supportedTypes = setOf(TvType.Anime, TvType.AnimeMovie)
 
     override val mainPage = mainPageOf(
-        Pair("${mainUrl}/list", "Ổ Phim"),
+        Pair("${mainUrl}/list", "Anime Hay"),
     )
 
     override val hasMainPage = true
     override val hasDownloadSupport = false
 
-    val movieUrl = "movies/danh-sach/phim-le";
+    val movieUrl = "movies/danh-sach/phim-bo";
     val tvSeriesUrl = "movies/danh-sach/phim-bo";
 
     private suspend fun request(url: String): NiceResponse {
@@ -78,7 +78,7 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
                     Episode(data = dataUrl, name = episode.name, posterUrl = movie.posterUrl)
                 }
 
-                return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodes) {
+                return newAnimeLoadResponse(movie.name, url, TvType.TvSeries, episodes) {
                     this.plot = movie.content
                     this.year = movie.publishYear
                     this.tags = movie.categories.mapNotNull { category -> category.name }

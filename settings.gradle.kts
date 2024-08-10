@@ -6,5 +6,6 @@ rootProject.name = "CloudStreamPlugins"
 // Plugins are included like this
 include(
     "OPhimProvider",
-    "KKPhimProvider"
+    "KKPhimProvider",
+    "AnimeHayProvider"
 )
