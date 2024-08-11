@@ -19,7 +19,7 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
     )
 
     override val hasMainPage = true
-    override val hasDownloadSupport = false
+    override val hasDownloadSupport = true
 
     val movieUrl = "movies/danh-sach/phim-le";
     val tvSeriesUrl = "movies/danh-sach/phim-bo";
@@ -69,12 +69,25 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
             val text = request(url).text
             val movie = tryParseJson<ResponseData<MovieResponse>>(text)?.data!!
 
-            val textEps = request("${mainUrl}/episodes/${movie.slug}").text
-            val episodesMovie = tryParseJson<ResponseListData<MoviesEpisodesResponse>>(textEps)?.data!!
+            if (movie.type == "single") {
+                var dataUrl = ""
+                if (movie.episodes.isNotEmpty()) {
+                    dataUrl = "${mainUrl}/episode/${movie.slug}/${movie.episodes[0].slug}"
+                }
+
+                return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
+                    this.plot = movie.content
+                    this.year = movie.publishYear
+                    this.tags = movie.categories.mapNotNull { category -> category.name }
+                    this.recommendations = el.getMoviesList("${mainUrl}/${movieUrl}", 1)
+                    addPoster(movie.posterUrl)
+                    addActors(movie.casts.mapNotNull { cast -> Actor(cast.name, "") })
+                }
+            }
 
             if (movie.type == "series") {
-                val episodes = episodesMovie.mapNotNull { episode ->
-                    val dataUrl = "${mainUrl}/episodes/${movie.slug}/${episode.slug}"
+                val episodes = movie.episodes.mapNotNull { episode ->
+                    val dataUrl = "${mainUrl}/episode/${movie.slug}/${episode.slug}"
                     Episode(data = dataUrl, name = episode.name, posterUrl = movie.posterUrl)
                 }
 
@@ -84,22 +97,8 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
                     this.tags = movie.categories.mapNotNull { category -> category.name }
                     this.recommendations = el.getMoviesList("${mainUrl}/${tvSeriesUrl}", 1)
                     addPoster(movie.posterUrl)
-                    addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
+                    addActors(movie.casts.mapNotNull { cast -> Actor(cast.name, "") })
                 }
-            }
-
-            var dataUrl = ""
-            if (episodesMovie.isNotEmpty()) {
-                dataUrl = "${mainUrl}/episodes/${movie.slug}/${episodesMovie[0].slug}"
-            }
-
-            return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
-                this.plot = movie.content
-                this.year = movie.publishYear
-                this.tags = movie.categories.mapNotNull { category -> category.name }
-                this.recommendations = el.getMoviesList("${mainUrl}/${movieUrl}", 1)
-                addPoster(movie.posterUrl)
-                addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
             }
         } catch (error: Exception) {}
 
@@ -178,18 +177,15 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
         @JsonProperty("thumbUrl") val thumbUrl: String,
         @JsonProperty("posterUrl") val posterUrl: String,
         @JsonProperty("publishYear") val publishYear: Int,
-        @JsonProperty("casts") val casts: List<String>,
-        @JsonProperty("categories") val categories: List<MovieTaxonomyResponse>
-    )
-
-    data class MovieTaxonomyResponse (
-        @JsonProperty("name") val name: String,
-        @JsonProperty("slug") val slug: String,
+        @JsonProperty("casts") val casts: List<MoviesTaxonomyResponse>,
+        @JsonProperty("categories") val categories: List<MoviesTaxonomyResponse>,
+        @JsonProperty("episodes") val episodes: List<MoviesEpisodesResponse>
     )
 
     data class MoviesResponse (
         @JsonProperty("name") val name: String,
         @JsonProperty("slug") val slug: String,
+        @JsonProperty("originName") val originName: String,
         @JsonProperty("thumbUrl") val thumbUrl: String,
         @JsonProperty("posterUrl") val posterUrl: String,
     )
@@ -204,11 +200,16 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
     data class MoviesEpisodeItemResponse (
         @JsonProperty("server") val server: String,
         @JsonProperty("linkM3u8") val linkM3u8: String,
+        @JsonProperty("linkEmbed") val linkEmbed: String,
     )
 
     data class MoviesEpisodesResponse (
         @JsonProperty("name") val name: String,
+        @JsonProperty("slug") val slug: String
+    )
+
+    data class MoviesTaxonomyResponse (
+        @JsonProperty("name") val name: String,
         @JsonProperty("slug") val slug: String,
-        @JsonProperty("filename") val filename: String
     )
 }

@@ -21,7 +21,7 @@ class AnimeHayProvider(val plugin: AnimeHayPlugin) : MainAPI() {
     override val hasMainPage = true
     override val hasDownloadSupport = false
 
-    val movieUrl = "movies/danh-sach/phim-bo";
+    val movieUrl = "movies/danh-sach/phim-le";
     val tvSeriesUrl = "movies/danh-sach/phim-bo";
 
     private suspend fun request(url: String): NiceResponse {
@@ -78,13 +78,12 @@ class AnimeHayProvider(val plugin: AnimeHayPlugin) : MainAPI() {
                     Episode(data = dataUrl, name = episode.name, posterUrl = movie.posterUrl)
                 }
 
-                return newAnimeLoadResponse(movie.name, url, TvType.TvSeries, episodes) {
+                return newAnimeLoadResponse(movie.name, url, TvType.Anime) {
                     this.plot = movie.content
                     this.year = movie.publishYear
                     this.tags = movie.categories.mapNotNull { category -> category.name }
-                    this.recommendations = el.getMoviesList("${mainUrl}/${tvSeriesUrl}", 1)
                     addPoster(movie.posterUrl)
-                    addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
+                    addEpisodes(DubStatus.Subbed, episodes)
                 }
             }
 
@@ -93,13 +92,12 @@ class AnimeHayProvider(val plugin: AnimeHayPlugin) : MainAPI() {
                 dataUrl = "${mainUrl}/episodes/${movie.slug}/${episodesMovie[0].slug}"
             }
 
-            return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
+            return newAnimeLoadResponse(movie.name, url, TvType.AnimeMovie) {
                 this.plot = movie.content
                 this.year = movie.publishYear
                 this.tags = movie.categories.mapNotNull { category -> category.name }
-                this.recommendations = el.getMoviesList("${mainUrl}/${movieUrl}", 1)
                 addPoster(movie.posterUrl)
-                addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
+                addEpisodes(DubStatus.Subbed, mutableListOf(Episode(data = dataUrl, name = "Full", posterUrl = movie.posterUrl)))
             }
         } catch (error: Exception) {}
 
@@ -135,7 +133,11 @@ class AnimeHayProvider(val plugin: AnimeHayPlugin) : MainAPI() {
 
     private suspend fun getMoviesList(url: String, page: Int, horizontal: Boolean = false): List<SearchResponse>? {
         try {
-            val text = request("${url}?page=${page}").text
+            var url = "${url}&page=${page}"
+            if (!url.contains("?")) {
+                url = "${url}?page=${page}"
+            }
+            val text = request(url).text
             val movies = tryParseJson<ResponsePaginationData<MoviesResponse>>(text)
 
             return movies?.data?.items?.mapNotNull{ movie ->
@@ -178,7 +180,6 @@ class AnimeHayProvider(val plugin: AnimeHayPlugin) : MainAPI() {
         @JsonProperty("thumbUrl") val thumbUrl: String,
         @JsonProperty("posterUrl") val posterUrl: String,
         @JsonProperty("publishYear") val publishYear: Int,
-        @JsonProperty("casts") val casts: List<String>,
         @JsonProperty("categories") val categories: List<MovieTaxonomyResponse>
     )
 
@@ -208,7 +209,6 @@ class AnimeHayProvider(val plugin: AnimeHayPlugin) : MainAPI() {
 
     data class MoviesEpisodesResponse (
         @JsonProperty("name") val name: String,
-        @JsonProperty("slug") val slug: String,
-        @JsonProperty("filename") val filename: String
+        @JsonProperty("slug") val slug: String
     )
 }
