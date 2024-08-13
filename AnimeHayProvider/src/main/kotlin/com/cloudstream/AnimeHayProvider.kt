@@ -1,21 +1,24 @@
-package com.muatoolhay
+package com.cloudstream
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.nicehttp.NiceResponse
 
-class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
+import java.net.URLEncoder
+
+class AnimeHayProvider(val plugin: AnimeHayPlugin) : MainAPI() {
     override var lang = "vi"
-    override var name = "Ổ Phim"
-    override var mainUrl = "https://mth-cloudstream.vercel.app/api/ophim"
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+    override var name = "Anime Hay"
+    override var mainUrl = "https://mth-cloudstream.vercel.app/api/animehay"
+    override val supportedTypes = setOf(TvType.Anime, TvType.AnimeMovie)
+
+    var proxyUrl = "https://mth-cloudstream.vercel.app/"
 
     override val mainPage = mainPageOf(
-        Pair("${mainUrl}/list", "Ổ Phim"),
+        Pair("${mainUrl}/list", name),
     )
 
     override val hasMainPage = true
@@ -69,40 +72,37 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
             val text = request(url).text
             val movie = tryParseJson<ResponseData<MovieResponse>>(text)?.data!!
 
-            if (movie.type == "single") {
-                var dataUrl = ""
-                if (movie.episodes.isNotEmpty()) {
-                    dataUrl = "${mainUrl}/episode/${movie.slug}/${movie.episodes[0].slug}"
-                }
+            val episodes = movie.episodes.mapNotNull { episode ->
+                val dataUrl = "${mainUrl}/episode/${movie.slug}/${episode.slug}"
+                Episode(data = dataUrl, name = episode.name, posterUrl = movie.posterUrl)
+            }
 
-                return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
+            if (movie.type == "single") {
+                return newAnimeLoadResponse(movie.name, url, TvType.AnimeMovie) {
                     this.plot = movie.content
                     this.year = movie.publishYear
                     this.tags = movie.categories.mapNotNull { category -> category.name }
                     this.recommendations = el.getMoviesList("${mainUrl}/${movieUrl}", 1)
                     addPoster(movie.posterUrl)
-                    addActors(movie.casts.mapNotNull { cast -> Actor(cast.name, "") })
+                    addEpisodes(DubStatus.Subbed, episodes)
                 }
             }
 
             if (movie.type == "series") {
-                val episodes = movie.episodes.mapNotNull { episode ->
-                    val dataUrl = "${mainUrl}/episode/${movie.slug}/${episode.slug}"
-                    Episode(data = dataUrl, name = episode.name, posterUrl = movie.posterUrl)
-                }
-
-                return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodes) {
+                return newAnimeLoadResponse(movie.name, url, TvType.Anime) {
                     this.plot = movie.content
                     this.year = movie.publishYear
                     this.tags = movie.categories.mapNotNull { category -> category.name }
                     this.recommendations = el.getMoviesList("${mainUrl}/${tvSeriesUrl}", 1)
                     addPoster(movie.posterUrl)
-                    addActors(movie.casts.mapNotNull { cast -> Actor(cast.name, "") })
+                    addEpisodes(DubStatus.Subbed, episodes)
                 }
             }
         } catch (error: Exception) {}
 
-        return newMovieLoadResponse("", url, TvType.Movie, "")
+        return newMovieLoadResponse("Something went wrong!", url, TvType.Movie, "") {
+            this.plot = "Error loading this movie. (CODE: ${url.split("/").lastOrNull()})"
+        }
     }
 
     override suspend fun loadLinks(
@@ -134,7 +134,12 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
 
     private suspend fun getMoviesList(url: String, page: Int, horizontal: Boolean = false): List<SearchResponse>? {
         try {
-            val text = request("${url}?page=${page}").text
+            var newUrl = "${url}?page=${page}"
+            if (url.contains("?")) {
+                newUrl = "${url}&page=${page}"
+            }
+
+            val text = request(newUrl).text
             val movies = tryParseJson<ResponsePaginationData<MoviesResponse>>(text)
 
             return movies?.data?.items?.mapNotNull{ movie ->
