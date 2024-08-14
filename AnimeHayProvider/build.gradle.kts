@@ -3,14 +3,14 @@ version = 1
 
 cloudstream {
     status = 1
-    authors = listOf("MuaToolHay")
+    authors = listOf("CloudStream")
 
     language = "vi"
-    description = "MuaToolHay"
+    description = "CloudStream"
 
     tvTypes = listOf("Anime")
 
-    iconUrl = "https://raw.githubusercontent.com/muatoolhay/cloudstream/main/vn_icon.png"
+    iconUrl = "https://codeberg.org/cloudstream609/cloudstream-extensions-vn/raw/branch/main/Icons/vn_icon.png"
     requiresResources = true
 }
 

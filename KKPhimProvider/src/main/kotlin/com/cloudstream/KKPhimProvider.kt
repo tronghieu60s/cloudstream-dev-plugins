@@ -12,99 +12,112 @@ import java.net.URL
 class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
     override var lang = "vi"
     override var name = "KK Phim"
-    override var mainUrl = "https://mth-cloudstream.vercel.app/api/kkphim"
+    override var mainUrl = "https://phimapi.com"
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
-        Pair("${mainUrl}/list", name),
+        Pair("${mainUrl}/danh-sach/phim-moi-cap-nhat", "Phim Mới/vertical"),
+        Pair("${mainUrl}/v1/api/danh-sach/phim-le", "Phim Lẻ/horizontal"),
+        Pair("${mainUrl}/v1/api/the-loai/tinh-cam", "Phim Tình Cảm/vertical"),
+        Pair("${mainUrl}/v1/api/quoc-gia/au-my", "Phim Âu - Mỹ/vertical"),
+        Pair("${mainUrl}/v1/api/quoc-gia/han-quoc", "Phim Hàn Quốc/vertical"),
+        Pair("${mainUrl}/v1/api/quoc-gia/trung-quoc", "Phim Trung Quốc/vertical"),
     )
 
     override val hasMainPage = true
     override val hasDownloadSupport = true
 
-    val movieUrl = "movies/danh-sach/phim-le";
-    val tvSeriesUrl = "movies/danh-sach/phim-bo";
+    var mainUrlImage = "https://phimimg.com"
 
     private suspend fun request(url: String): NiceResponse {
-        val headers: Map<String, String> = mapOf(
-            "Content-Type" to "application/json",
-            "Authorization" to "Bearer Dghb6eXKon9VsEigqhatqCbo4COpXY8wgoBCmuj33KGyc77XnWw8xdGs5b81vk2L"
-        )
-        return app.get(url, headers = headers)
+        return app.get(url)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        return this.getMoviesList("${mainUrl}/movies/search?keyword=${query}", 1)!!
+        return this.getMoviesList("${mainUrl}v1/api/tim-kiem?keyword=${query}", 1)!!
     }
 
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val list = mutableListOf<HomePageList>()
+        val name = request.name.split("/")[0]
+        val horizontal = request.name.split("/")[1] == "horizontal"
 
-        try {
-            if (page <= 1) {
-                val text = request(request.data).text
-                val items = tryParseJson<ResponseListData<HomeResponse>>(text)
-                items?.data?.forEach { item ->
-                    list.add(HomePageList(
-                        item.name,
-                        this.getMoviesList("${mainUrl}/movies/${item.link}",1, item.horizontal)!!,
-                        item.horizontal
-                    ))
-                }
-            }
-        } catch (error: Exception) {}
-
-        return newHomePageResponse(
-            list = list,
-            hasNext = true
+        val homePageList = HomePageList(
+            name = name,
+            list = if (request.data.contains("v1/api"))
+                this.getMoviesList(request.data, page, horizontal)!!
+                else this.getMoviesListNotV1(request.data, page, horizontal)!!,
+            isHorizontalImages = horizontal
         )
+
+        return newHomePageResponse(list = homePageList, hasNext = true)
     }
 
     override suspend fun load(url: String): LoadResponse {
+        val el = this
+
         try {
-            val el = this;
-
             val text = request(url).text
-            val movie = tryParseJson<ResponseData<MovieResponse>>(text)?.data!!
+            val response = tryParseJson<MovieResponse>(text)!!
 
-            if (movie.type == "single") {
-                var dataUrl = ""
-                if (movie.episodes.isNotEmpty()) {
-                    dataUrl = "${mainUrl}/episode/${movie.slug}/${movie.episodes[0].slug}"
-                }
+            val movie = response.movie
+            val episodes = this.mapEpisodesResponse(response.episodes)
 
-                return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
-                    this.plot = movie.content
-                    this.year = movie.publishYear
-                    this.tags = movie.categories.mapNotNull { category -> category.name }
-                    this.recommendations = el.getMoviesList("${mainUrl}/${movieUrl}", 1)
-                    addPoster(movie.posterUrl)
-                    addActors(movie.casts.mapNotNull { cast -> Actor(cast.name, "") })
+            var type = movie.type
+            if (type != "single" && type != "series") {
+                type = if (episodes.size > 1) "series" else "single"
+            }
+
+            if (type == "single") {
+                val dataUrl = "${url}@@@${episodes[0].slug}"
+                val url = dataUrl.split("@@@")[0]
+                val slug = dataUrl.split("@@@")[1]
+
+                val text = request(url).text
+                val response = tryParseJson<MovieResponse>(text)!!
+
+                val episodes = this.mapEpisodesResponse(response.episodes)
+                val episodeItem = episodes.find { episode -> episode.slug == slug}
+
+                if (episodeItem != null) {
+                    return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
+                        this.plot = movie.content
+                        this.year = movie.publishYear
+                        this.tags = movie.categories.mapNotNull { category -> category.name }
+                        this.recommendations = el.getMoviesList("${mainUrl}/v1/api/danh-sach/phim-le", 1)
+                        addPoster(movie.posterUrl)
+                        addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
+                    }
                 }
             }
 
-            if (movie.type == "series") {
-                val episodes = movie.episodes.mapNotNull { episode ->
-                    val dataUrl = "${mainUrl}/episode/${movie.slug}/${episode.slug}"
-                    Episode(data = dataUrl, name = episode.name, posterUrl = movie.posterUrl)
+            if (type == "series") {
+                val episodes = episodes.mapNotNull { episode ->
+                    val dataUrl = "${url}@@@${episode.slug}"
+                    Episode(
+                        data = dataUrl,
+                        name = episode.name,
+                        posterUrl = movie.posterUrl,
+                        description = episode.filename
+                    )
                 }
 
                 return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodes) {
                     this.plot = movie.content
                     this.year = movie.publishYear
                     this.tags = movie.categories.mapNotNull { category -> category.name }
-                    this.recommendations = el.getMoviesList("${mainUrl}/${tvSeriesUrl}", 1)
+                    this.recommendations = el.getMoviesList("${mainUrl}/v1/api/danh-sach/phim-bo", 1)
                     addPoster(movie.posterUrl)
-                    addActors(movie.casts.mapNotNull { cast -> Actor(cast.name, "") })
+                    addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
                 }
             }
         } catch (error: Exception) {}
 
-        return newMovieLoadResponse("Something went wrong!", url, TvType.Movie, "") {
-            this.plot = "Error loading this movie. (CODE: ${url.split("/").lastOrNull()})"
+        val codeText = "(CODE: ${url.split("/").lastOrNull()})"
+        return newMovieLoadResponse(url, "Something went wrong!", TvType.Movie, "") {
+            this.plot = "There's a problem loading this content. $codeText"
         }
     }
 
@@ -114,28 +127,36 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val text = request(data).text
-        val episode = tryParseJson<ResponseData<MoviesEpisodeResponse>>(text)?.data!!
+        val url = data.split("@@@")[0]
+        val slug = data.split("@@@")[1]
 
-        val episodes = episode.episodes
+        val text = request(url).text
+        val response = tryParseJson<MovieResponse>(text)!!
 
-        episodes.mapNotNull { episode ->
-            callback.invoke(
-                ExtractorLink(
-                    episode.server,
-                    episode.server,
-                    episode.linkM3u8,
-                    referer = "$mainUrl/",
-                    quality = Qualities.P1080.value,
-                    isM3u8 = true,
+        val episodes = this.mapEpisodesResponse(response.episodes)
+        val episodeItem = episodes.find { episode -> episode.slug == slug}
+
+        if (episodeItem !== null) {
+            episodeItem.episodes.forEach{ episode ->
+                callback.invoke(
+                    ExtractorLink(
+                        episode.server,
+                        episode.server,
+                        episode.linkM3u8,
+                        referer = mainUrl,
+                        quality = Qualities.Unknown.value,
+                        isM3u8 = true,
+                    )
                 )
-            )
+            }
         }
 
         return true
     }
 
     private suspend fun getMoviesList(url: String, page: Int, horizontal: Boolean = false): List<SearchResponse>? {
+        val el = this
+
         try {
             var newUrl = "${url}?page=${page}"
             if (url.contains("?")) {
@@ -143,11 +164,12 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
             }
 
             val text = request(newUrl).text
-            val movies = tryParseJson<ResponsePaginationData<MoviesResponse>>(text)
+            val response = tryParseJson<ListResponse>(text)
 
-            return movies?.data?.items?.mapNotNull{ movie ->
-                newMovieSearchResponse(movie.name, "${mainUrl}/movie/${movie.slug}", TvType.Movie, true) {
-                    this.posterUrl = if (horizontal) movie.posterUrl else movie.thumbUrl
+            return response?.data?.items?.mapNotNull{ movie ->
+                val url = "${mainUrl}/phim/${movie.slug}"
+                newMovieSearchResponse(movie.name, url, TvType.Movie, true) {
+                    this.posterUrl = if (horizontal) el.getImageUrl(movie.posterUrl) else el.getImageUrl(movie.thumbUrl)
                 }
             }
         } catch (error: Exception) {}
@@ -155,69 +177,144 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
         return mutableListOf<SearchResponse>()
     }
 
-    data class ResponseData<T> (
-        @JsonProperty("data") val data: T
+    private suspend fun getMoviesListNotV1(url: String, page: Int, horizontal: Boolean = false): List<SearchResponse>? {
+        val el = this
+
+        try {
+            var newUrl = "${url}?page=${page}"
+            if (url.contains("?")) {
+                newUrl = "${url}&page=${page}"
+            }
+
+            val text = request(newUrl).text
+            val response = tryParseJson<ListDataResponse>(text)
+
+            return response?.items?.mapNotNull{ movie ->
+                val url = "${mainUrl}/phim/${movie.slug}"
+                newMovieSearchResponse(movie.name, url, TvType.Movie, true) {
+                    this.posterUrl = if (horizontal) el.getImageUrl(movie.posterUrl) else el.getImageUrl(movie.thumbUrl)
+                }
+            }
+        } catch (error: Exception) {}
+
+        return mutableListOf<SearchResponse>()
+    }
+
+    data class ListResponse (
+        @JsonProperty("data") val data: ListDataResponse,
     )
 
-    data class ResponseListData<T> (
-        @JsonProperty("data") val data: List<T>
-    )
-
-    data class ResponsePagination<T> (
-        @JsonProperty("items") val items: List<T>
-    )
-
-    data class ResponsePaginationData<T> (
-        @JsonProperty("data") val data: ResponsePagination<T>
-    )
-
-    data class HomeResponse (
-        @JsonProperty("name") val name: String,
-        @JsonProperty("link") val link: String,
-        @JsonProperty("horizontal") val horizontal: Boolean,
-    )
-
-    data class MovieResponse (
-        @JsonProperty("name") val name: String,
-        @JsonProperty("slug") val slug: String,
-        @JsonProperty("type") val type: String,
-        @JsonProperty("content") val content: String,
-        @JsonProperty("thumbUrl") val thumbUrl: String,
-        @JsonProperty("posterUrl") val posterUrl: String,
-        @JsonProperty("publishYear") val publishYear: Int,
-        @JsonProperty("casts") val casts: List<MoviesTaxonomyResponse>,
-        @JsonProperty("categories") val categories: List<MoviesTaxonomyResponse>,
-        @JsonProperty("episodes") val episodes: List<MoviesEpisodesResponse>
+    data class ListDataResponse (
+        @JsonProperty("items") val items: List<MoviesResponse>
     )
 
     data class MoviesResponse (
         @JsonProperty("name") val name: String,
         @JsonProperty("slug") val slug: String,
-        @JsonProperty("originName") val originName: String,
-        @JsonProperty("thumbUrl") val thumbUrl: String,
-        @JsonProperty("posterUrl") val posterUrl: String,
+        @JsonProperty("poster_url") val thumbUrl: String,
+        @JsonProperty("thumb_url") val posterUrl: String,
     )
 
-    data class MoviesEpisodeResponse (
+    data class MovieResponse (
+        @JsonProperty("movie") val movie: MovieDetailResponse,
+        @JsonProperty("episodes") val episodes: List<MovieEpisodeResponse>,
+    )
+
+    data class MovieDetailResponse (
+        @JsonProperty("name") val name: String,
+        @JsonProperty("slug") val slug: String,
+        @JsonProperty("type") val type: String,
+        @JsonProperty("content") val content: String,
+        @JsonProperty("poster_url") val thumbUrl: String,
+        @JsonProperty("thumb_url") val posterUrl: String,
+        @JsonProperty("year") val publishYear: Int,
+        @JsonProperty("actor") val casts: List<String>,
+        @JsonProperty("category") val categories: List<MovieTaxonomyResponse>,
+    )
+
+    data class MovieTaxonomyResponse (
+        @JsonProperty("name") val name: String,
+        @JsonProperty("slug") val slug: String,
+    )
+
+    data class MovieEpisodeResponse (
+        @JsonProperty("server_name") val serverName: String,
+        @JsonProperty("server_data") val serverData: List<MovieEpisodeDataResponse>,
+    )
+
+    data class MovieEpisodeDataResponse (
         @JsonProperty("name") val name: String,
         @JsonProperty("slug") val slug: String,
         @JsonProperty("filename") val filename: String,
-        @JsonProperty("episodes") val episodes: List<MoviesEpisodeItemResponse>
+        @JsonProperty("link_m3u8") val linkM3u8: String,
+        @JsonProperty("link_embed") val linkEmbed: String,
     )
 
-    data class MoviesEpisodeItemResponse (
-        @JsonProperty("server") val server: String,
-        @JsonProperty("linkM3u8") val linkM3u8: String,
-        @JsonProperty("linkEmbed") val linkEmbed: String,
+    data class MappedData (
+        val name: String,
+        val slug: String,
+        val filename: String,
+        val server: String,
+        val linkM3u8: String,
+        val linkEmbed: String
     )
 
-    data class MoviesEpisodesResponse (
-        @JsonProperty("name") val name: String,
-        @JsonProperty("slug") val slug: String
+    data class MappedEpisode (
+        val name: String,
+        val slug: String,
+        val filename: String,
+        val episodes: MutableList<MappedEpisodeItem> = mutableListOf()
     )
 
-    data class MoviesTaxonomyResponse (
-        @JsonProperty("name") val name: String,
-        @JsonProperty("slug") val slug: String,
+    data class MappedEpisodeItem (
+        val server: String,
+        val linkM3u8: String,
+        val linkEmbed: String
     )
+
+    private fun getImageUrl(url: String): String {
+        var newUrl = url
+        if (!url.contains("http")) {
+            newUrl = "${mainUrlImage}/${url}"
+        }
+        return newUrl
+    }
+
+    private suspend fun mapEpisodesResponse(episodes: List<MovieEpisodeResponse>): List<MappedEpisode> {
+        return episodes
+            .flatMap { episode ->
+                episode.serverData.map { item ->
+                    MappedData(
+                        name = item.name,
+                        slug = item.slug,
+                        filename = item.filename,
+                        server = episode.serverName,
+                        linkM3u8 = item.linkM3u8,
+                        linkEmbed = item.linkEmbed
+                    )
+                }.filter { data ->
+                    data.name.isNotEmpty()
+                }
+            }
+            .fold(mutableMapOf<String, MappedEpisode>()) { acc, cur ->
+                val key = cur.name
+                val episode = acc.getOrPut(key) {
+                    MappedEpisode(
+                        name = cur.name,
+                        slug = cur.slug,
+                        filename = cur.filename,
+                    )
+                }
+                episode.episodes.add(
+                    MappedEpisodeItem(
+                        server = cur.server,
+                        linkM3u8 = cur.linkM3u8,
+                        linkEmbed = cur.linkEmbed
+                    )
+                )
+                acc
+            }
+            .values
+            .sortedBy { it.name }
+    }
 }

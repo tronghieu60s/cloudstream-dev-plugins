@@ -19,7 +19,7 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
         Pair("${mainUrl}/v1/api/danh-sach/phim-le", "Phim Lẻ/horizontal"),
         Pair("${mainUrl}/v1/api/the-loai/tinh-cam", "Phim Tình Cảm/vertical"),
         Pair("${mainUrl}/v1/api/quoc-gia/au-my", "Phim Âu - Mỹ/vertical"),
-        Pair("${mainUrl}/v1/api/quoc-gia/han-quoc", "Phim Hàn Quốc'/vertical"),
+        Pair("${mainUrl}/v1/api/quoc-gia/han-quoc", "Phim Hàn Quốc/vertical"),
         Pair("${mainUrl}/v1/api/quoc-gia/trung-quoc", "Phim Trung Quốc/vertical"),
     )
 
@@ -53,7 +53,7 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val el = this;
+        val el = this
 
         try {
             val text = request(url).text
@@ -152,6 +152,8 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
     }
 
     private suspend fun getMoviesList(url: String, page: Int, horizontal: Boolean = false): List<SearchResponse>? {
+        val el = this
+
         try {
             var newUrl = "${url}?page=${page}"
             if (url.contains("?")) {
@@ -164,7 +166,7 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
             return response?.data?.items?.mapNotNull{ movie ->
                 val url = "${mainUrl}/phim/${movie.slug}"
                 newMovieSearchResponse(movie.name, url, TvType.Movie, true) {
-                    this.posterUrl = if (horizontal) "${mainUrlImage}/${movie.posterUrl}" else "${mainUrlImage}/${movie.thumbUrl}"
+                    this.posterUrl = if (horizontal) el.getImageUrl(movie.posterUrl) else el.getImageUrl(movie.thumbUrl)
                 }
             }
         } catch (error: Exception) {}
@@ -243,6 +245,14 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
         val linkM3u8: String,
         val linkEmbed: String
     )
+
+    private fun getImageUrl(url: String): String {
+        var newUrl = url
+        if (!url.contains("http")) {
+            newUrl = "${mainUrlImage}/${url}"
+        }
+        return newUrl
+    }
 
     private suspend fun mapEpisodesResponse(episodes: List<MovieEpisodeResponse>): List<MappedEpisode> {
         return episodes
