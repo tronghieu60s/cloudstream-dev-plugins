@@ -6,12 +6,12 @@ import android.content.Context
 import androidx.appcompat.app.AppCompatActivity
 
 @CloudstreamPlugin
-class AnimeHayPlugin: Plugin() {
+class PhimNguonCPlugin: Plugin() {
     var activity: AppCompatActivity? = null
 
     override fun load(context: Context) {
         activity = context as AppCompatActivity
         // All providers should be added in this manner
-        registerMainAPI(AnimeHayProvider(this))
+        registerMainAPI(PhimNguonCProvider(this))
     }
 }

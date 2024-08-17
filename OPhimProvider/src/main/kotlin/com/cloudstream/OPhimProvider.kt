@@ -33,7 +33,7 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        return this.getMoviesList("${mainUrl}v1/api/tim-kiem?keyword=${query}", 1)!!
+        return this.getMoviesList("${mainUrl}/v1/api/tim-kiem?keyword=${query}", 1)!!
     }
 
     override suspend fun getMainPage(
@@ -68,30 +68,23 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
             }
 
             if (type == "single") {
-                val dataUrl = "${url}@@@${episodes[0].slug}"
-                val url = dataUrl.split("@@@")[0]
-                val slug = dataUrl.split("@@@")[1]
+                var dataUrl = "${url}@@@"
+                if (episodes.isNotEmpty()) {
+                    dataUrl = "${url}@@@${episodes[0].slug}"
+                }
 
-                val text = request(url).text
-                val response = tryParseJson<MovieResponse>(text)!!
-
-                val episodes = this.mapEpisodesResponse(response.episodes)
-                val episodeItem = episodes.find { episode -> episode.slug == slug}
-
-                if (episodeItem != null) {
-                    return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
-                        this.plot = movie.content
-                        this.year = movie.publishYear
-                        this.tags = movie.categories.mapNotNull { category -> category.name }
-                        this.recommendations = el.getMoviesList("${mainUrl}/v1/api/danh-sach/phim-le", 1)
-                        addPoster(movie.posterUrl)
-                        addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
-                    }
+                return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
+                    this.plot = movie.content
+                    this.year = movie.publishYear
+                    this.tags = movie.categories.mapNotNull { category -> category.name }
+                    this.recommendations = el.getMoviesList("${mainUrl}/v1/api/danh-sach/phim-le", 1)
+                    addPoster(movie.posterUrl)
+                    addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
                 }
             }
 
             if (type == "series") {
-                val episodes = episodes.mapNotNull { episode ->
+                val episodesMapped = episodes.mapNotNull { episode ->
                     val dataUrl = "${url}@@@${episode.slug}"
                     Episode(
                         data = dataUrl,
@@ -101,7 +94,7 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
                     )
                 }
 
-                return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodes) {
+                return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodesMapped) {
                     this.plot = movie.content
                     this.year = movie.publishYear
                     this.tags = movie.categories.mapNotNull { category -> category.name }
@@ -113,7 +106,7 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
         } catch (error: Exception) {}
 
         val codeText = "(CODE: ${url.split("/").lastOrNull()})"
-        return newMovieLoadResponse(url, "Something went wrong!", TvType.Movie, "") {
+        return newMovieLoadResponse("Something went wrong!", url, TvType.Movie, "") {
             this.plot = "There's a problem loading this content. $codeText"
         }
     }
@@ -164,8 +157,8 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
             val response = tryParseJson<ListResponse>(text)
 
             return response?.data?.items?.mapNotNull{ movie ->
-                val url = "${mainUrl}/phim/${movie.slug}"
-                newMovieSearchResponse(movie.name, url, TvType.Movie, true) {
+                val movieUrl = "${mainUrl}/phim/${movie.slug}"
+                newMovieSearchResponse(movie.name, movieUrl, TvType.Movie, true) {
                     this.posterUrl = if (horizontal) el.getImageUrl(movie.posterUrl) else el.getImageUrl(movie.thumbUrl)
                 }
             }

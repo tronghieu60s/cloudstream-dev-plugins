@@ -7,34 +7,35 @@ import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.nicehttp.NiceResponse
-import java.net.URL
 
-class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
+import java.net.URLEncoder
+
+class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
     override var lang = "vi"
-    override var name = "KK Phim"
-    override var mainUrl = "https://phimapi.com"
+    override var name = "Phim Nguồn C"
+    override var mainUrl = "https://phim.nguonc.com/api"
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
-        Pair("${mainUrl}/danh-sach/phim-moi-cap-nhat", "Phim Mới/vertical"),
-        Pair("${mainUrl}/v1/api/danh-sach/phim-le", "Phim Lẻ/horizontal"),
-        Pair("${mainUrl}/v1/api/the-loai/tinh-cam", "Phim Tình Cảm/vertical"),
-        Pair("${mainUrl}/v1/api/quoc-gia/au-my", "Phim Âu - Mỹ/vertical"),
-        Pair("${mainUrl}/v1/api/quoc-gia/han-quoc", "Phim Hàn Quốc/vertical"),
-        Pair("${mainUrl}/v1/api/quoc-gia/trung-quoc", "Phim Trung Quốc/vertical"),
+        Pair("${mainUrl}/films/phim-moi-cap-nhat", "Phim Mới/vertical"),
+        Pair("${mainUrl}/films/the-loai/hanh-dong", "Phim Hành Động/vertical"),
+        Pair("${mainUrl}/films/the-loai/tinh-cam", "Phim Tình Cảm/vertical"),
+        Pair("${mainUrl}/films/quoc-gia/au-my", "Phim Âu - Mỹ/vertical"),
+        Pair("${mainUrl}/films/quoc-gia/han-quoc", "Phim Hàn Quốc/vertical"),
+        Pair("${mainUrl}/films/quoc-gia/trung-quoc", "Phim Trung Quốc/vertical"),
     )
 
     override val hasMainPage = true
     override val hasDownloadSupport = true
 
-    var mainUrlImage = "https://phimimg.com"
+    var mainUrlImage = "https://phim.nguonc.com"
 
     private suspend fun request(url: String): NiceResponse {
         return app.get(url)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        return this.getMoviesList("${mainUrl}/v1/api/tim-kiem?keyword=${query}", 1)!!
+        return this.getMoviesList("${mainUrl}/films/search?keyword=${query}", 1)!!
     }
 
     override suspend fun getMainPage(
@@ -46,9 +47,7 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
 
         val homePageList = HomePageList(
             name = name,
-            list = if (request.data.contains("v1/api"))
-                this.getMoviesList(request.data, page, horizontal)!!
-                else this.getMoviesListNotV1(request.data, page, horizontal)!!,
+            list = this.getMoviesList(request.data, page, horizontal)!!,
             isHorizontalImages = horizontal
         )
 
@@ -63,12 +62,16 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
             val response = tryParseJson<MovieResponse>(text)!!
 
             val movie = response.movie
-            val episodes = this.mapEpisodesResponse(response.episodes)
+            val episodes = this.mapEpisodesResponse(response.movie.episodes)
 
-            var type = movie.type
+
+            var type = ""
             if (type != "single" && type != "series") {
                 type = if (episodes.size > 1) "series" else "single"
             }
+
+            val categories = this.findCategoryList(movie.category, "Thể loại")
+            val publishYear = this.findCategoryList(movie.category, "Năm")
 
             if (type == "single") {
                 var dataUrl = "${url}@@@"
@@ -78,11 +81,13 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
 
                 return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
                     this.plot = movie.content
-                    this.year = movie.publishYear
-                    this.tags = movie.categories.mapNotNull { category -> category.name }
-                    this.recommendations = el.getMoviesList("${mainUrl}/v1/api/danh-sach/phim-le", 1)
+                    if (publishYear.isNotEmpty()) {
+                        this.year = publishYear[0].name.toInt()
+                    }
+                    this.tags = categories.mapNotNull { category -> category.name }
+                    this.recommendations = el.getMoviesList("${mainUrl}/films/phim-moi-cap-nhat", 1)
                     addPoster(movie.posterUrl)
-                    addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
+                    addActors(movie.casts.split(",").mapNotNull { cast -> Actor(cast, "") })
                 }
             }
 
@@ -99,11 +104,13 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
 
                 return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodesMapped) {
                     this.plot = movie.content
-                    this.year = movie.publishYear
-                    this.tags = movie.categories.mapNotNull { category -> category.name }
-                    this.recommendations = el.getMoviesList("${mainUrl}/v1/api/danh-sach/phim-bo", 1)
+                    if (publishYear.isNotEmpty()) {
+                        this.year = publishYear[0].name.toInt()
+                    }
+                    this.tags = categories.mapNotNull { category -> category.name }
+                    this.recommendations = el.getMoviesList("${mainUrl}/films/phim-moi-cap-nhat", 1)
                     addPoster(movie.posterUrl)
-                    addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
+                    addActors(movie.casts.split(",").mapNotNull { cast -> Actor(cast, "") })
                 }
             }
         } catch (error: Exception) {}
@@ -126,19 +133,21 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
         val text = request(url).text
         val response = tryParseJson<MovieResponse>(text)!!
 
-        val episodes = this.mapEpisodesResponse(response.episodes)
+        val episodes = this.mapEpisodesResponse(response.movie.episodes)
         val episodeItem = episodes.find { episode -> episode.slug == slug}
 
         if (episodeItem !== null) {
             episodeItem.episodes.forEach{ episode ->
+                val episodeUrl = episode.linkEmbed.replace("embed.php", "get.php")
                 callback.invoke(
                     ExtractorLink(
                         episode.server,
                         episode.server,
-                        episode.linkM3u8,
-                        referer = mainUrl,
+                        episodeUrl,
+                        referer = url,
                         quality = Qualities.Unknown.value,
                         isM3u8 = true,
+                        headers = mapOf("Referer" to episodeUrl)
                     )
                 )
             }
@@ -147,82 +156,52 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
         return true
     }
 
-    private suspend fun getMoviesList(url: String, page: Int, horizontal: Boolean = false): List<SearchResponse>? {
-        val el = this
-
-        try {
-            var newUrl = "${url}?page=${page}"
-            if (url.contains("?")) {
-                newUrl = "${url}&page=${page}"
-            }
-
-            val text = request(newUrl).text
-            val response = tryParseJson<ListResponse>(text)
-
-            return response?.data?.items?.mapNotNull{ movie ->
-                val movieUrl = "${mainUrl}/phim/${movie.slug}"
-                newMovieSearchResponse(movie.name, movieUrl, TvType.Movie, true) {
-                    this.posterUrl = if (horizontal) el.getImageUrl(movie.posterUrl) else el.getImageUrl(movie.thumbUrl)
-                }
-            }
-        } catch (error: Exception) {}
-
-        return mutableListOf<SearchResponse>()
-    }
-
-    private suspend fun getMoviesListNotV1(url: String, page: Int, horizontal: Boolean = false): List<SearchResponse>? {
-        val el = this
-
-        try {
-            var newUrl = "${url}?page=${page}"
-            if (url.contains("?")) {
-                newUrl = "${url}&page=${page}"
-            }
-
-            val text = request(newUrl).text
-            val response = tryParseJson<ListDataResponse>(text)
-
-            return response?.items?.mapNotNull{ movie ->
-                val movieUrl = "${mainUrl}/phim/${movie.slug}"
-                newMovieSearchResponse(movie.name, movieUrl, TvType.Movie, true) {
-                    this.posterUrl = if (horizontal) el.getImageUrl(movie.posterUrl) else el.getImageUrl(movie.thumbUrl)
-                }
-            }
-        } catch (error: Exception) {}
-
-        return mutableListOf<SearchResponse>()
-    }
-
     data class ListResponse (
-        @JsonProperty("data") val data: ListDataResponse,
-    )
-
-    data class ListDataResponse (
         @JsonProperty("items") val items: List<MoviesResponse>
     )
 
     data class MoviesResponse (
         @JsonProperty("name") val name: String,
         @JsonProperty("slug") val slug: String,
-        @JsonProperty("poster_url") val thumbUrl: String,
-        @JsonProperty("thumb_url") val posterUrl: String,
+        @JsonProperty("thumb_url") val thumbUrl: String,
+        @JsonProperty("poster_url") val posterUrl: String,
     )
 
     data class MovieResponse (
         @JsonProperty("movie") val movie: MovieDetailResponse,
-        @JsonProperty("episodes") val episodes: List<MovieEpisodeResponse>,
     )
 
     data class MovieDetailResponse (
         @JsonProperty("name") val name: String,
         @JsonProperty("slug") val slug: String,
-        @JsonProperty("type") val type: String,
-        @JsonProperty("content") val content: String,
-        @JsonProperty("poster_url") val thumbUrl: String,
-        @JsonProperty("thumb_url") val posterUrl: String,
-        @JsonProperty("year") val publishYear: Int,
-        @JsonProperty("actor") val casts: List<String>,
-        @JsonProperty("category") val categories: List<MovieTaxonomyResponse>,
+        @JsonProperty("description") val content: String,
+        @JsonProperty("thumb_url") val thumbUrl: String,
+        @JsonProperty("poster_url") val posterUrl: String,
+        @JsonProperty("casts") val casts: String,
+        @JsonProperty("category") val category: MovieCategoryResponse,
+        @JsonProperty("episodes") val episodes: List<MovieEpisodeResponse>,
+    )
+
+    data class MovieCategoryResponse (
+        @JsonProperty("1") val category1: MovieCategoryItemResponse,
+        @JsonProperty("2") val category2: MovieCategoryItemResponse,
+        @JsonProperty("3") val category3: MovieCategoryItemResponse,
+        @JsonProperty("4") val category4: MovieCategoryItemResponse
+    )
+
+    data class MovieCategoryItemResponse (
+        @JsonProperty("list") val list: List<MovieCategoryListResponse>,
+        @JsonProperty("group") val group: MovieCategoryGroupResponse,
+    )
+
+    data class MovieCategoryListResponse (
+        @JsonProperty("id") val id: String,
+        @JsonProperty("name") val name: String
+    )
+
+    data class MovieCategoryGroupResponse (
+        @JsonProperty("id") val id: String,
+        @JsonProperty("name") val name: String
     )
 
     data class MovieTaxonomyResponse (
@@ -232,15 +211,14 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
 
     data class MovieEpisodeResponse (
         @JsonProperty("server_name") val serverName: String,
-        @JsonProperty("server_data") val serverData: List<MovieEpisodeDataResponse>,
+        @JsonProperty("items") val serverData: List<MovieEpisodeDataResponse>,
     )
 
     data class MovieEpisodeDataResponse (
         @JsonProperty("name") val name: String,
         @JsonProperty("slug") val slug: String,
-        @JsonProperty("filename") val filename: String,
-        @JsonProperty("link_m3u8") val linkM3u8: String,
-        @JsonProperty("link_embed") val linkEmbed: String,
+        @JsonProperty("m3u8") val linkM3u8: String,
+        @JsonProperty("embed") val linkEmbed: String,
     )
 
     data class MappedData (
@@ -273,6 +251,41 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
         return newUrl
     }
 
+    private suspend fun getMoviesList(url: String, page: Int, horizontal: Boolean = false): List<SearchResponse>? {
+        val el = this
+
+        try {
+            var newUrl = "${url}?page=${page}"
+            if (url.contains("?")) {
+                newUrl = "${url}&page=${page}"
+            }
+
+            val text = request(newUrl).text
+            val response = tryParseJson<ListResponse>(text)
+
+            return response?.items?.mapNotNull{ movie ->
+                val movieUrl = "${mainUrl}/film/${movie.slug}"
+                newMovieSearchResponse(movie.name, movieUrl, TvType.Movie, true) {
+                    this.posterUrl = if (horizontal) el.getImageUrl(movie.posterUrl) else el.getImageUrl(movie.thumbUrl)
+                }
+            }
+        } catch (error: Exception) {}
+
+        return mutableListOf<SearchResponse>()
+    }
+
+    private suspend fun findCategoryList(category: MovieCategoryResponse, name: String): List<MovieCategoryListResponse> {
+        val categories = listOf(category.category1, category.category2, category.category3, category.category4)
+
+        for (categoryItem in categories) {
+            if (categoryItem.group.name == name) {
+                return categoryItem.list
+            }
+        }
+
+        return mutableListOf()
+    }
+
     private suspend fun mapEpisodesResponse(episodes: List<MovieEpisodeResponse>): List<MappedEpisode> {
         return episodes
             .flatMap { episode ->
@@ -280,7 +293,7 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
                     MappedData(
                         name = item.name,
                         slug = item.slug,
-                        filename = item.filename,
+                        filename = "",
                         server = episode.serverName,
                         linkM3u8 = item.linkM3u8,
                         linkEmbed = item.linkEmbed

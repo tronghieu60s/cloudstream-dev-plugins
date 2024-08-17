@@ -8,7 +8,7 @@ cloudstream {
     language = "vi"
     description = "CloudStream"
 
-    tvTypes = listOf("Anime")
+    tvTypes = listOf("Movie", "TvSeries")
 
     iconUrl = "https://codeberg.org/cloudstream609/cloudstream-extensions-vn/raw/branch/main/Icons/vn_icon.png"
     requiresResources = true
