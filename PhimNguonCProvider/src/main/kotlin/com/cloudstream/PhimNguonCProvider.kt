@@ -87,7 +87,7 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
                     this.tags = categories.mapNotNull { category -> category.name }
                     this.recommendations = el.getMoviesList("${mainUrl}/films/phim-moi-cap-nhat", 1)
                     addPoster(movie.posterUrl)
-                    addActors(movie.casts.split(",").mapNotNull { cast -> Actor(cast, "") })
+                    addActors(movie.casts?.split(",")?.mapNotNull { cast -> Actor(cast, "") })
                 }
             }
 
@@ -110,7 +110,7 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
                     this.tags = categories.mapNotNull { category -> category.name }
                     this.recommendations = el.getMoviesList("${mainUrl}/films/phim-moi-cap-nhat", 1)
                     addPoster(movie.posterUrl)
-                    addActors(movie.casts.split(",").mapNotNull { cast -> Actor(cast, "") })
+                    addActors(movie.casts?.split(",")?.mapNotNull { cast -> Actor(cast, "") })
                 }
             }
         } catch (error: Exception) {}
@@ -177,7 +177,7 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
         @JsonProperty("description") val content: String,
         @JsonProperty("thumb_url") val thumbUrl: String,
         @JsonProperty("poster_url") val posterUrl: String,
-        @JsonProperty("casts") val casts: String,
+        @JsonProperty("casts") val casts: String?,
         @JsonProperty("category") val category: MovieCategoryResponse,
         @JsonProperty("episodes") val episodes: List<MovieEpisodeResponse>,
     )
@@ -302,23 +302,23 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
                     data.name.isNotEmpty()
                 }
             }
-            .fold(mutableMapOf<String, MappedEpisode>()) { acc, cur ->
-                val key = cur.name
-                val episode = acc.getOrPut(key) {
+            .fold(mutableMapOf<String, MappedEpisode>()) { accumulator, current ->
+                val key = current.name
+                val episode = accumulator.getOrPut(key) {
                     MappedEpisode(
-                        name = cur.name,
-                        slug = cur.slug,
-                        filename = cur.filename,
+                        name = current.name,
+                        slug = current.slug,
+                        filename = current.filename,
                     )
                 }
                 episode.episodes.add(
                     MappedEpisodeItem(
-                        server = cur.server,
-                        linkM3u8 = cur.linkM3u8,
-                        linkEmbed = cur.linkEmbed
+                        server = current.server,
+                        linkM3u8 = current.linkM3u8,
+                        linkEmbed = current.linkEmbed
                     )
                 )
-                acc
+                accumulator
             }
             .values
             .sortedBy { it.name }

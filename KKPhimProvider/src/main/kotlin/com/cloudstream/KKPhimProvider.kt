@@ -289,23 +289,23 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
                     data.name.isNotEmpty()
                 }
             }
-            .fold(mutableMapOf<String, MappedEpisode>()) { acc, cur ->
-                val key = cur.name
-                val episode = acc.getOrPut(key) {
+            .fold(mutableMapOf<String, MappedEpisode>()) { accumulator, current ->
+                val key = current.name
+                val episode = accumulator.getOrPut(key) {
                     MappedEpisode(
-                        name = cur.name,
-                        slug = cur.slug,
-                        filename = cur.filename,
+                        name = current.name,
+                        slug = current.slug,
+                        filename = current.filename,
                     )
                 }
                 episode.episodes.add(
                     MappedEpisodeItem(
-                        server = cur.server,
-                        linkM3u8 = cur.linkM3u8,
-                        linkEmbed = cur.linkEmbed
+                        server = current.server,
+                        linkM3u8 = current.linkM3u8,
+                        linkEmbed = current.linkEmbed
                     )
                 )
-                acc
+                accumulator
             }
             .values
             .sortedBy { it.name }
