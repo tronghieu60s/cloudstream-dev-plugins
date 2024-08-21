@@ -8,32 +8,34 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.nicehttp.NiceResponse
 
-class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
+import java.net.URLEncoder
+
+class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
     override var lang = "vi"
-    override var name = "Ổ Phim"
-    override var mainUrl = "https://ophim1.com"
+    override var name = "Mọt Chill"
+    override var mainUrl = "https://motchill.onl"
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
-        Pair("${mainUrl}/v1/api/danh-sach/phim-moi-cap-nhat", "Phim Mới/vertical"),
-        Pair("${mainUrl}/v1/api/danh-sach/phim-le", "Phim Lẻ/horizontal"),
-        Pair("${mainUrl}/v1/api/the-loai/tinh-cam", "Phim Tình Cảm/vertical"),
-        Pair("${mainUrl}/v1/api/quoc-gia/au-my", "Phim Âu - Mỹ/vertical"),
-        Pair("${mainUrl}/v1/api/quoc-gia/han-quoc", "Phim Hàn Quốc/vertical"),
-        Pair("${mainUrl}/v1/api/quoc-gia/trung-quoc", "Phim Trung Quốc/vertical"),
+        Pair("${mainUrl}/danh-sach/phim-moi", "Phim Mới/vertical"),
+        Pair("${mainUrl}/danh-sach/phim-le", "Phim Lẻ/horizontal"),
+        Pair("${mainUrl}/the-loai/tinh-cam", "Phim Tình Cảm/vertical"),
+        Pair("${mainUrl}/quoc-gia/au-my", "Phim Âu - Mỹ/vertical"),
+        Pair("${mainUrl}/quoc-gia/han-quoc", "Phim Hàn Quốc/vertical"),
+        Pair("${mainUrl}/quoc-gia/trung-quoc", "Phim Trung Quốc/vertical"),
     )
 
     override val hasMainPage = true
     override val hasDownloadSupport = true
 
-    var mainUrlImage = "https://img.ophim.live/uploads/movies"
+    var mainUrlImage = "https://motchill.onl"
 
     private suspend fun request(url: String): NiceResponse {
         return app.get(url)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        return this.getMoviesList("${mainUrl}/v1/api/tim-kiem?keyword=${query}", 1)!!
+        return this.getMoviesList("${mainUrl}/?search=${query}", 1)!!
     }
 
     override suspend fun getMainPage(
@@ -56,51 +58,56 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
         val el = this
 
         try {
-            val text = request(url).text
-            val response = tryParseJson<MovieResponse>(text)!!
+            val document = request(url).document
 
-            val movie = response.movie
-            val movieEpisodes = this.mapEpisodesResponse(response.episodes)
+            val name = document.select(".myui-content__detail .title").text().trim()
+            val content = document.select(".myui-movie-detail div[itemprop=\"description\"]").text().trim()
+            val thumbUrl = document.select(".myui-content__thumb img").attr("src")
+            val metaInfo = document.select(".myui-content__detail .myui-media-info h6")
 
-            var type = movie.type
-            if (type != "single" && type != "series") {
-                type = if (movieEpisodes.size > 1) "series" else "single"
+            var type = "series"
+            var casts = listOf<String>()
+            var categories = listOf<String>()
+            var publishYear = 0
+            for ((index, metaInfoItem) in metaInfo.withIndex()) {
+                val title = metaInfoItem?.text()?.trim().toString()
+                if (index == 0) {
+                    publishYear = """\(\d{4}\)""".toRegex().find(title)?.value?.removeSurrounding("(", ")")?.toInt()!!
+                }
+                if (title.contains("Thể loại:")) {
+                    categories = metaInfoItem.select("a").mapNotNull { category ->  category?.text()?.trim() }
+                }
+                if (title.contains("Trạng thái:") && title.lowercase().contains("full")) {
+                    type = "single"
+                }
+                if (title.contains("Diễn viên:")) {
+                    casts = metaInfoItem.select("a").mapNotNull { cast ->  cast?.text()?.trim() }
+                }
             }
 
             if (type == "single") {
                 var dataUrl = "${url}@@@"
-                if (movieEpisodes.isNotEmpty()) {
-                    dataUrl = "${url}@@@${movieEpisodes[0].slug}"
-                }
 
-                return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
-                    this.plot = movie.content
-                    this.year = movie.publishYear
-                    this.tags = movie.categories.mapNotNull { category -> category.name }
-                    this.recommendations = el.getMoviesList("${mainUrl}/v1/api/danh-sach/phim-le", 1)
-                    addPoster(movie.posterUrl)
-                    addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
+                return newMovieLoadResponse(name, url, TvType.Movie, dataUrl) {
+                    this.plot = content
+                    this.year = publishYear
+                    this.tags = categories
+                    this.recommendations = el.getMoviesList("${mainUrl}/danh-sach/phim-le", 1)
+                    addPoster(el.getImageUrl(thumbUrl))
+                    addActors(casts.mapNotNull { cast -> Actor(cast, "") })
                 }
             }
 
             if (type == "series") {
-                val episodes = movieEpisodes.mapNotNull { episode ->
-                    val dataUrl = "${url}@@@${episode.slug}"
-                    Episode(
-                        data = dataUrl,
-                        name = episode.name,
-                        posterUrl = movie.posterUrl,
-                        description = episode.filename
-                    )
-                }
+                var dataUrl = "${url}@@@"
 
-                return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodes) {
-                    this.plot = movie.content
-                    this.year = movie.publishYear
-                    this.tags = movie.categories.mapNotNull { category -> category.name }
-                    this.recommendations = el.getMoviesList("${mainUrl}/v1/api/danh-sach/phim-bo", 1)
-                    addPoster(movie.posterUrl)
-                    addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
+                return newTvSeriesLoadResponse(name, url, TvType.TvSeries, mutableListOf()) {
+                    this.plot = content
+                    this.year = publishYear
+                    this.tags = categories
+                    this.recommendations = el.getMoviesList("${mainUrl}/danh-sach/phim-bo", 1)
+                    addPoster(el.getImageUrl(thumbUrl))
+                    addActors(casts.mapNotNull { cast -> Actor(cast, "") })
                 }
             }
         } catch (error: Exception) {}
@@ -123,19 +130,21 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
         val text = request(url).text
         val response = tryParseJson<MovieResponse>(text)!!
 
-        val episodes = this.mapEpisodesResponse(response.episodes)
+        val episodes = this.mapEpisodesResponse(response.movie.episodes)
         val episodeItem = episodes.find { episode -> episode.slug == slug}
 
         if (episodeItem !== null) {
             episodeItem.episodes.forEach{ episode ->
+                val episodeUrl = episode.linkEmbed.replace("embed.php", "get.php")
                 callback.invoke(
                     ExtractorLink(
                         episode.server,
                         episode.server,
-                        episode.linkM3u8,
-                        referer = mainUrl,
+                        episodeUrl,
+                        referer = url,
                         quality = Qualities.Unknown.value,
                         isM3u8 = true,
+                        headers = mapOf("Referer" to episodeUrl)
                     )
                 )
             }
@@ -145,10 +154,6 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
     }
 
     data class ListResponse (
-        @JsonProperty("data") val data: ListDataResponse,
-    )
-
-    data class ListDataResponse (
         @JsonProperty("items") val items: List<MoviesResponse>
     )
 
@@ -161,19 +166,39 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
 
     data class MovieResponse (
         @JsonProperty("movie") val movie: MovieDetailResponse,
-        @JsonProperty("episodes") val episodes: List<MovieEpisodeResponse>,
     )
 
     data class MovieDetailResponse (
         @JsonProperty("name") val name: String,
         @JsonProperty("slug") val slug: String,
-        @JsonProperty("type") val type: String,
-        @JsonProperty("content") val content: String,
+        @JsonProperty("description") val content: String,
         @JsonProperty("thumb_url") val thumbUrl: String,
         @JsonProperty("poster_url") val posterUrl: String,
-        @JsonProperty("year") val publishYear: Int,
-        @JsonProperty("actor") val casts: List<String>,
-        @JsonProperty("category") val categories: List<MovieTaxonomyResponse>,
+        @JsonProperty("casts") val casts: String,
+        @JsonProperty("category") val category: MovieCategoryResponse,
+        @JsonProperty("episodes") val episodes: List<MovieEpisodeResponse>,
+    )
+
+    data class MovieCategoryResponse (
+        @JsonProperty("1") val category1: MovieCategoryItemResponse,
+        @JsonProperty("2") val category2: MovieCategoryItemResponse,
+        @JsonProperty("3") val category3: MovieCategoryItemResponse,
+        @JsonProperty("4") val category4: MovieCategoryItemResponse
+    )
+
+    data class MovieCategoryItemResponse (
+        @JsonProperty("list") val list: List<MovieCategoryListResponse>,
+        @JsonProperty("group") val group: MovieCategoryGroupResponse,
+    )
+
+    data class MovieCategoryListResponse (
+        @JsonProperty("id") val id: String,
+        @JsonProperty("name") val name: String
+    )
+
+    data class MovieCategoryGroupResponse (
+        @JsonProperty("id") val id: String,
+        @JsonProperty("name") val name: String
     )
 
     data class MovieTaxonomyResponse (
@@ -183,15 +208,14 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
 
     data class MovieEpisodeResponse (
         @JsonProperty("server_name") val serverName: String,
-        @JsonProperty("server_data") val serverData: List<MovieEpisodeDataResponse>,
+        @JsonProperty("items") val serverData: List<MovieEpisodeDataResponse>,
     )
 
     data class MovieEpisodeDataResponse (
         @JsonProperty("name") val name: String,
         @JsonProperty("slug") val slug: String,
-        @JsonProperty("filename") val filename: String,
-        @JsonProperty("link_m3u8") val linkM3u8: String,
-        @JsonProperty("link_embed") val linkEmbed: String,
+        @JsonProperty("m3u8") val linkM3u8: String,
+        @JsonProperty("embed") val linkEmbed: String,
     )
 
     data class MappedData (
@@ -219,8 +243,7 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
     private fun getImageUrl(url: String): String {
         var newUrl = url
         if (!url.contains("http")) {
-            newUrl = if (url.first() == '/')
-                "${mainUrlImage}${url}" else "${mainUrlImage}/${url}"
+            newUrl = "${mainUrlImage}${url}"
         }
         return newUrl
     }
@@ -234,18 +257,32 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
                 newUrl = "${url}&page=${page}"
             }
 
-            val text = request(newUrl).text
-            val response = tryParseJson<ListResponse>(text)
+            val document = request(newUrl).document
+            val items = document.select(".myui-vodlist__box")
 
-            return response?.data?.items?.mapNotNull{ movie ->
-                val movieUrl = "${mainUrl}/phim/${movie.slug}"
-                newMovieSearchResponse(movie.name, movieUrl, TvType.Movie, true) {
-                    this.posterUrl = if (horizontal) el.getImageUrl(movie.posterUrl) else el.getImageUrl(movie.thumbUrl)
+            return items.mapNotNull{ movie ->
+                val name = movie.select(".myui-vodlist__detail .title a").text().trim()
+                val movieUrl = movie.select(".myui-vodlist__detail .title a").attr("href")
+                val thumbUrl = """url\((.*?)\)""".toRegex().find(movie.select("a").attr("style"))?.groups?.get(1)?.value
+                newMovieSearchResponse(name, movieUrl, TvType.Movie, true) {
+                    this.posterUrl = if (horizontal) el.getImageUrl(thumbUrl!!) else el.getImageUrl(thumbUrl!!)
                 }
             }
         } catch (error: Exception) {}
 
         return mutableListOf<SearchResponse>()
+    }
+
+    private suspend fun findCategoryList(category: MovieCategoryResponse, name: String): List<MovieCategoryListResponse> {
+        val categories = listOf(category.category1, category.category2, category.category3, category.category4)
+
+        for (categoryItem in categories) {
+            if (categoryItem.group.name == name) {
+                return categoryItem.list
+            }
+        }
+
+        return mutableListOf()
     }
 
     private suspend fun mapEpisodesResponse(episodes: List<MovieEpisodeResponse>): List<MappedEpisode> {
@@ -255,7 +292,7 @@ class OPhimProvider(val plugin: OPhimPlugin) : MainAPI() {
                     MappedData(
                         name = item.name,
                         slug = item.slug,
-                        filename = item.filename,
+                        filename = "",
                         server = episode.serverName,
                         linkM3u8 = item.linkM3u8,
                         linkEmbed = item.linkEmbed

@@ -62,12 +62,12 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
             val response = tryParseJson<MovieResponse>(text)!!
 
             val movie = response.movie
-            val episodes = this.mapEpisodesResponse(response.movie.episodes)
+            val movieEpisodes = this.mapEpisodesResponse(response.movie.episodes)
 
 
             var type = ""
             if (type != "single" && type != "series") {
-                type = if (episodes.size > 1) "series" else "single"
+                type = if (movieEpisodes.size > 1) "series" else "single"
             }
 
             val categories = this.findCategoryList(movie.category, "Thể loại")
@@ -75,8 +75,8 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
 
             if (type == "single") {
                 var dataUrl = "${url}@@@"
-                if (episodes.isNotEmpty()) {
-                    dataUrl = "${url}@@@${episodes[0].slug}"
+                if (movieEpisodes.isNotEmpty()) {
+                    dataUrl = "${url}@@@${movieEpisodes[0].slug}"
                 }
 
                 return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
@@ -84,7 +84,7 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
                     if (publishYear.isNotEmpty()) {
                         this.year = publishYear[0].name.toInt()
                     }
-                    this.tags = categories.mapNotNull { category -> category.name }
+                    this.tags = categories.mapNotNull { it.name }
                     this.recommendations = el.getMoviesList("${mainUrl}/films/phim-moi-cap-nhat", 1)
                     addPoster(movie.posterUrl)
                     addActors(movie.casts?.split(",")?.mapNotNull { cast -> Actor(cast, "") })
@@ -92,7 +92,7 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
             }
 
             if (type == "series") {
-                val episodesMapped = episodes.mapNotNull { episode ->
+                val episodes = movieEpisodes.mapNotNull { episode ->
                     val dataUrl = "${url}@@@${episode.slug}"
                     Episode(
                         data = dataUrl,
@@ -102,12 +102,12 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
                     )
                 }
 
-                return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodesMapped) {
+                return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodes) {
                     this.plot = movie.content
                     if (publishYear.isNotEmpty()) {
                         this.year = publishYear[0].name.toInt()
                     }
-                    this.tags = categories.mapNotNull { category -> category.name }
+                    this.tags = categories.mapNotNull { it.name }
                     this.recommendations = el.getMoviesList("${mainUrl}/films/phim-moi-cap-nhat", 1)
                     addPoster(movie.posterUrl)
                     addActors(movie.casts?.split(",")?.mapNotNull { cast -> Actor(cast, "") })
@@ -246,7 +246,8 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
     private fun getImageUrl(url: String): String {
         var newUrl = url
         if (!url.contains("http")) {
-            newUrl = "${mainUrlImage}/${url}"
+            newUrl = if (url.first() == '/')
+                "${mainUrlImage}${url}" else "${mainUrlImage}/${url}"
         }
         return newUrl
     }

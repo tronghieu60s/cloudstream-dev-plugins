@@ -63,17 +63,17 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
             val response = tryParseJson<MovieResponse>(text)!!
 
             val movie = response.movie
-            val episodes = this.mapEpisodesResponse(response.episodes)
+            val movieEpisodes = this.mapEpisodesResponse(response.episodes)
 
             var type = movie.type
             if (type != "single" && type != "series") {
-                type = if (episodes.size > 1) "series" else "single"
+                type = if (movieEpisodes.size > 1) "series" else "single"
             }
 
             if (type == "single") {
                 var dataUrl = "${url}@@@"
-                if (episodes.isNotEmpty()) {
-                    dataUrl = "${url}@@@${episodes[0].slug}"
+                if (movieEpisodes.isNotEmpty()) {
+                    dataUrl = "${url}@@@${movieEpisodes[0].slug}"
                 }
 
                 return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
@@ -87,7 +87,7 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
             }
 
             if (type == "series") {
-                val episodesMapped = episodes.mapNotNull { episode ->
+                val episodes = movieEpisodes.mapNotNull { episode ->
                     val dataUrl = "${url}@@@${episode.slug}"
                     Episode(
                         data = dataUrl,
@@ -97,7 +97,7 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
                     )
                 }
 
-                return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodesMapped) {
+                return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodes) {
                     this.plot = movie.content
                     this.year = movie.publishYear
                     this.tags = movie.categories.mapNotNull { category -> category.name }
@@ -145,52 +145,6 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
         }
 
         return true
-    }
-
-    private suspend fun getMoviesList(url: String, page: Int, horizontal: Boolean = false): List<SearchResponse>? {
-        val el = this
-
-        try {
-            var newUrl = "${url}?page=${page}"
-            if (url.contains("?")) {
-                newUrl = "${url}&page=${page}"
-            }
-
-            val text = request(newUrl).text
-            val response = tryParseJson<ListResponse>(text)
-
-            return response?.data?.items?.mapNotNull{ movie ->
-                val movieUrl = "${mainUrl}/phim/${movie.slug}"
-                newMovieSearchResponse(movie.name, movieUrl, TvType.Movie, true) {
-                    this.posterUrl = if (horizontal) el.getImageUrl(movie.posterUrl) else el.getImageUrl(movie.thumbUrl)
-                }
-            }
-        } catch (error: Exception) {}
-
-        return mutableListOf<SearchResponse>()
-    }
-
-    private suspend fun getMoviesListNotV1(url: String, page: Int, horizontal: Boolean = false): List<SearchResponse>? {
-        val el = this
-
-        try {
-            var newUrl = "${url}?page=${page}"
-            if (url.contains("?")) {
-                newUrl = "${url}&page=${page}"
-            }
-
-            val text = request(newUrl).text
-            val response = tryParseJson<ListDataResponse>(text)
-
-            return response?.items?.mapNotNull{ movie ->
-                val movieUrl = "${mainUrl}/phim/${movie.slug}"
-                newMovieSearchResponse(movie.name, movieUrl, TvType.Movie, true) {
-                    this.posterUrl = if (horizontal) el.getImageUrl(movie.posterUrl) else el.getImageUrl(movie.thumbUrl)
-                }
-            }
-        } catch (error: Exception) {}
-
-        return mutableListOf<SearchResponse>()
     }
 
     data class ListResponse (
@@ -268,9 +222,56 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
     private fun getImageUrl(url: String): String {
         var newUrl = url
         if (!url.contains("http")) {
-            newUrl = "${mainUrlImage}/${url}"
+            newUrl = if (url.first() == '/')
+                "${mainUrlImage}${url}" else "${mainUrlImage}/${url}"
         }
         return newUrl
+    }
+
+    private suspend fun getMoviesList(url: String, page: Int, horizontal: Boolean = false): List<SearchResponse>? {
+        val el = this
+
+        try {
+            var newUrl = "${url}?page=${page}"
+            if (url.contains("?")) {
+                newUrl = "${url}&page=${page}"
+            }
+
+            val text = request(newUrl).text
+            val response = tryParseJson<ListResponse>(text)
+
+            return response?.data?.items?.mapNotNull{ movie ->
+                val movieUrl = "${mainUrl}/phim/${movie.slug}"
+                newMovieSearchResponse(movie.name, movieUrl, TvType.Movie, true) {
+                    this.posterUrl = if (horizontal) el.getImageUrl(movie.posterUrl) else el.getImageUrl(movie.thumbUrl)
+                }
+            }
+        } catch (error: Exception) {}
+
+        return mutableListOf<SearchResponse>()
+    }
+
+    private suspend fun getMoviesListNotV1(url: String, page: Int, horizontal: Boolean = false): List<SearchResponse>? {
+        val el = this
+
+        try {
+            var newUrl = "${url}?page=${page}"
+            if (url.contains("?")) {
+                newUrl = "${url}&page=${page}"
+            }
+
+            val text = request(newUrl).text
+            val response = tryParseJson<ListDataResponse>(text)
+
+            return response?.items?.mapNotNull{ movie ->
+                val movieUrl = "${mainUrl}/phim/${movie.slug}"
+                newMovieSearchResponse(movie.name, movieUrl, TvType.Movie, true) {
+                    this.posterUrl = if (horizontal) el.getImageUrl(movie.posterUrl) else el.getImageUrl(movie.thumbUrl)
+                }
+            }
+        } catch (error: Exception) {}
+
+        return mutableListOf<SearchResponse>()
     }
 
     private suspend fun mapEpisodesResponse(episodes: List<MovieEpisodeResponse>): List<MappedEpisode> {
