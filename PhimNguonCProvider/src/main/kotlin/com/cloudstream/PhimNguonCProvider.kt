@@ -86,7 +86,7 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
                     }
                     this.tags = categories.mapNotNull { it.name }
                     this.recommendations = el.getMoviesList("${mainUrl}/films/phim-moi-cap-nhat", 1)
-                    addPoster(movie.posterUrl)
+                    addPoster(el.getImageUrl(movie.posterUrl))
                     addActors(movie.casts?.split(",")?.mapNotNull { cast -> Actor(cast, "") })
                 }
             }
@@ -97,7 +97,7 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
                     Episode(
                         data = dataUrl,
                         name = episode.name,
-                        posterUrl = movie.posterUrl,
+                        posterUrl = el.getImageUrl(movie.posterUrl),
                         description = episode.filename
                     )
                 }
@@ -109,7 +109,7 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
                     }
                     this.tags = categories.mapNotNull { it.name }
                     this.recommendations = el.getMoviesList("${mainUrl}/films/phim-moi-cap-nhat", 1)
-                    addPoster(movie.posterUrl)
+                    addPoster(el.getImageUrl(movie.posterUrl))
                     addActors(movie.casts?.split(",")?.mapNotNull { cast -> Actor(cast, "") })
                 }
             }
@@ -138,16 +138,16 @@ class PhimNguonCProvider(val plugin: PhimNguonCPlugin) : MainAPI() {
 
         if (episodeItem !== null) {
             episodeItem.episodes.forEach{ episode ->
-                val episodeUrl = episode.linkEmbed.replace("embed.php", "get.php")
+                val linkEmbed = episode.linkEmbed.replace("embed.php", "get.php")
                 callback.invoke(
                     ExtractorLink(
                         episode.server,
                         episode.server,
-                        episodeUrl,
+                        linkEmbed,
                         referer = url,
                         quality = Qualities.Unknown.value,
                         isM3u8 = true,
-                        headers = mapOf("Referer" to episodeUrl)
+                        headers = mapOf("Referer" to linkEmbed)
                     )
                 )
             }

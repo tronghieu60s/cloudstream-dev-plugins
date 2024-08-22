@@ -2,7 +2,9 @@ package com.cloudstream
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import com.lagradost.cloudstream3.mvvm.safeApiCall
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.nicehttp.NiceResponse
 
 class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
@@ -62,7 +64,7 @@ class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
             var casts = listOf<String>()
             var categories = listOf<String>()
             var duration = ""
-            val publishYear = """\(\d{4}\)""".toRegex().find(document.select(".film-info h2").text())?.value?.removeSurrounding("(", ")")?.toInt()!!
+            val publishYear = """\(\d{4}\)""".toRegex().find(document.select(".film-info h2").text())?.value?.removeSurrounding("(", ")")?.toInt()?: 0
 
             val entries = document.select(".entry-meta li")
             val latestEpisode = document.select(".latest-episode")
@@ -97,11 +99,12 @@ class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
 
             if (type == "series") {
                 var episodes = listOf<Episode>()
+
                 var dataUrl = document.select(".list-button .btn.btn-see").attr("href")
                 if (!dataUrl.isNullOrEmpty()) {
-                    val document = request(dataUrl).document
+                    val epsDocument = request(dataUrl).document
 
-                    episodes = document.select(".episodes a").mapNotNull { episode ->
+                    episodes = epsDocument.select(".episodes a").mapNotNull { episode ->
                         Episode(
                             data = episode.attr("href"),
                             name = episode.text().trim(),
@@ -133,6 +136,47 @@ class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        val id = "pm(\\d+)$".toRegex().find(data)?.groupValues?.get(1)?: ""
+
+        (0..4).forEach { index ->
+            val playerText = app.post(
+                url = "https://phimmoichillv.net/chillsplayer.php",
+                data = mapOf("qcao" to id, "sv" to index.toString()),
+                referer = data,
+                headers = mapOf("Content-Type" to "multipart/form-data"
+            )).text
+
+            var server = ""
+            var linkM3u8 = ""
+            if (playerText.contains("player/sotrym.js")) {
+                server = "#${index + 1} PMFAST"
+
+                val idPlayer = playerText.substringAfter("iniPlayers(\"").substringBefore("\",")
+                linkM3u8 = "https://dash.motchills.net/raw/${idPlayer}/index.m3u8"
+            } else if (playerText.contains("player/dashstrim.js")) {
+                server = "#${index + 1} PMHLS"
+
+                val idPlayer = playerText.substringAfter("iniPlayers(\"").substringBefore("\",")
+                linkM3u8 = "https://sotrim.topphimmoi.org/raw/${idPlayer}/index.m3u8"
+            } else if (playerText.contains("player/pmcontent.js")) {
+                server = "#${index + 1} PMPRO"
+
+                val idPlayer = playerText.substringAfter("initPlayer(\"").substringBefore("\",")
+                linkM3u8 = if (index == 2) "https://dash.megacdn.xyz/raw/${idPlayer}/index.m3u8" else idPlayer
+            }
+
+            callback.invoke(
+                ExtractorLink(
+                    server,
+                    server,
+                    linkM3u8,
+                    referer = mainUrl,
+                    quality = Qualities.Unknown.value,
+                    isM3u8 = true
+                )
+            )
+        }
+
         return true
     }
 
@@ -159,7 +203,7 @@ class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
                 val movieUrl = movie.select("a").attr("href")
                 val posterUrl = movie.select("a img").attr("src")
                 newMovieSearchResponse(name, movieUrl, TvType.Movie, true) {
-                    this.posterUrl = if (horizontal) el.getImageUrl(posterUrl!!) else el.getImageUrl(posterUrl!!)
+                    this.posterUrl = if (horizontal) el.getImageUrl(posterUrl) else el.getImageUrl(posterUrl)
                 }
             }
         } catch (error: Exception) {}

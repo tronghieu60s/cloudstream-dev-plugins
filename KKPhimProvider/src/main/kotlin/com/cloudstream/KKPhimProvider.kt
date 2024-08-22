@@ -79,9 +79,9 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
                 return newMovieLoadResponse(movie.name, url, TvType.Movie, dataUrl) {
                     this.plot = movie.content
                     this.year = movie.publishYear
-                    this.tags = movie.categories.mapNotNull { category -> category.name }
+                    this.tags = movie.categories.mapNotNull { it.name }
                     this.recommendations = el.getMoviesList("${mainUrl}/v1/api/danh-sach/phim-le", 1)
-                    addPoster(movie.posterUrl)
+                    addPoster(el.getImageUrl(movie.posterUrl))
                     addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
                 }
             }
@@ -92,7 +92,7 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
                     Episode(
                         data = dataUrl,
                         name = episode.name,
-                        posterUrl = movie.posterUrl,
+                        posterUrl = el.getImageUrl(movie.posterUrl),
                         description = episode.filename
                     )
                 }
@@ -100,9 +100,9 @@ class KKPhimProvider(val plugin: KKPhimPlugin) : MainAPI() {
                 return newTvSeriesLoadResponse(movie.name, url, TvType.TvSeries, episodes) {
                     this.plot = movie.content
                     this.year = movie.publishYear
-                    this.tags = movie.categories.mapNotNull { category -> category.name }
+                    this.tags = movie.categories.mapNotNull { it.name }
                     this.recommendations = el.getMoviesList("${mainUrl}/v1/api/danh-sach/phim-bo", 1)
-                    addPoster(movie.posterUrl)
+                    addPoster(el.getImageUrl(movie.posterUrl))
                     addActors(movie.casts.mapNotNull { cast -> Actor(cast, "") })
                 }
             }
