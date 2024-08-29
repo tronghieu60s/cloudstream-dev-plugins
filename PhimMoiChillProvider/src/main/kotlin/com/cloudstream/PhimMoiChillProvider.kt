@@ -2,10 +2,11 @@ package com.cloudstream
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
-import com.lagradost.cloudstream3.mvvm.safeApiCall
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.nicehttp.NiceResponse
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
     override var lang = "vi"
@@ -26,6 +27,7 @@ class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
     override val hasDownloadSupport = true
 
     var mainUrlImage = "https://img.phimmoichillv.net"
+    var mainUrlProxy = "https://cloudstream-proxy.vercel.app"
 
     private suspend fun request(url: String): NiceResponse {
         return app.get(url)
@@ -138,7 +140,7 @@ class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
     ): Boolean {
         val id = "pm(\\d+)$".toRegex().find(data)?.groupValues?.get(1)?: ""
 
-        (0..4).forEach { index ->
+        (0..1).forEach { index ->
             val playerText = app.post(
                 url = "https://phimmoichillv.net/chillsplayer.php",
                 data = mapOf("qcao" to id, "sv" to index.toString()),
@@ -153,16 +155,15 @@ class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
 
                 val idPlayer = playerText.substringAfter("iniPlayers(\"").substringBefore("\",")
                 linkM3u8 = "https://dash.motchills.net/raw/${idPlayer}/index.m3u8"
-            } else if (playerText.contains("player/dashstrim.js")) {
-                server = "#${index + 1} PMHLS"
+            }
+
+            if (playerText.contains("player/dashstrim.js")) {
+                server = "#${index + 1} PMHLS (Proxy)"
 
                 val idPlayer = playerText.substringAfter("iniPlayers(\"").substringBefore("\",")
-                linkM3u8 = "https://sotrim.topphimmoi.org/raw/${idPlayer}/index.m3u8"
-            } else if (playerText.contains("player/pmcontent.js")) {
-                server = "#${index + 1} PMPRO"
+                val encodedUrl = URLEncoder.encode("https://sotrim.topphimmoi.org/hlspm/${idPlayer}", StandardCharsets.UTF_8.toString())
 
-                val idPlayer = playerText.substringAfter("initPlayer(\"").substringBefore("\",")
-                linkM3u8 = if (index == 2) "https://dash.megacdn.xyz/raw/${idPlayer}/index.m3u8" else idPlayer
+                linkM3u8 = "${mainUrlProxy}/api/phimmoichill/proxy?url=${encodedUrl}"
             }
 
             callback.invoke(
