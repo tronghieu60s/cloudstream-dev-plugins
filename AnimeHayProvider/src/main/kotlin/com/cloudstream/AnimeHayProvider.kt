@@ -16,13 +16,17 @@ class AnimeHayProvider(val plugin: AnimeHayPlugin) : MainAPI() {
 
     override val mainPage = mainPageOf(
         Pair("${mainUrl}/phim-moi-cap-nhap", "Anime Mới/vertical"),
+        Pair("${mainUrl}/loc-phim/W1tdLFtdLFs5OTk5XSxbXV0=", "Anime Lẻ/vertical"),
+        Pair("${mainUrl}/loc-phim/W1tdLFsyMDI0XSxbXSxbXV0=", "Anime 2024/vertical"),
+        Pair("${mainUrl}/the-loai/tinh-cam-4", "Anime Tình Cảm/vertical"),
+        Pair("${mainUrl}/the-loai/hanh-dong-2", "Anime Hành Động/vertical"),
+        Pair("${mainUrl}/the-loai/cn-animation-34", "China Animation/vertical"),
     )
 
     override val hasMainPage = true
     override val hasDownloadSupport = true
 
     var mainUrlImage = "https://animehay.in"
-    var mainUrlProxy = "https://cloudstream-proxy.vercel.app"
 
     private suspend fun request(url: String): NiceResponse {
         return app.get(url)

@@ -87,7 +87,7 @@ class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
             val type = if (latestEpisode.size > 0 || duration.lowercase().contains("tập")) "series" else "single"
 
             if (type == "single") {
-                var dataUrl = document.select(".list-button .btn.btn-see").attr("href")
+                var dataUrl = type + "@@@" + document.select(".list-button .btn.btn-see").attr("href")
 
                 return newMovieLoadResponse(name, url, TvType.Movie, dataUrl) {
                     this.plot = content
@@ -108,7 +108,7 @@ class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
 
                     episodes = epsDocument.select(".episodes a").mapNotNull { episode ->
                         Episode(
-                            data = episode.attr("href"),
+                            data = type + "@@@" + episode.attr("href"),
                             name = episode.text().trim(),
                             posterUrl = el.getImageUrl(posterUrl),
                         )
@@ -138,45 +138,26 @@ class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val id = "pm(\\d+)$".toRegex().find(data)?.groupValues?.get(1)?: ""
+        val el = this
 
-        (0..1).forEach { index ->
-            val playerText = app.post(
-                url = "https://phimmoichillv.net/chillsplayer.php",
-                data = mapOf("qcao" to id, "sv" to index.toString()),
-                referer = data,
-                headers = mapOf("Content-Type" to "multipart/form-data"
-            )).text
+        val url = data.split("@@@")[1]?: "";
+        val type = data.split("@@@")[0]?: "";
 
-            var server = ""
-            var linkM3u8 = ""
-            if (playerText.contains("player/sotrym.js")) {
-                server = "#${index + 1} PMFAST"
+        if (type == "single") {
+            val document = request(url).document
+            val episodes = document.select(".episodes a")
 
-                val idPlayer = playerText.substringAfter("iniPlayers(\"").substringBefore("\",")
-                linkM3u8 = "https://dash.motchills.net/raw/${idPlayer}/index.m3u8"
+            if (episodes.size > 1) {
+                episodes.forEach{ episode ->
+                    val id = episode.attr("data-id")
+                    val name = episode.text().trim()
+                    el.getEpisodePlayer(id, data, callback, name)
+                }
             }
-
-            if (playerText.contains("player/dashstrim.js")) {
-                server = "#${index + 1} PMHLS (Proxy)"
-
-                val idPlayer = playerText.substringAfter("iniPlayers(\"").substringBefore("\",")
-                val encodedUrl = URLEncoder.encode("https://sotrim.topphimmoi.org/hlspm/${idPlayer}", StandardCharsets.UTF_8.toString())
-
-                linkM3u8 = "${mainUrlProxy}/api/phimmoichill/proxy?url=${encodedUrl}"
-            }
-
-            callback.invoke(
-                ExtractorLink(
-                    server,
-                    server,
-                    linkM3u8,
-                    referer = mainUrl,
-                    quality = Qualities.Unknown.value,
-                    isM3u8 = true
-                )
-            )
         }
+
+        val id = "pm(\\d+)$".toRegex().find(data)?.groupValues?.get(1)?: ""
+        el.getEpisodePlayer(id, data, callback)
 
         return true
     }
@@ -210,5 +191,45 @@ class PhimMoiChillProvider(val plugin: PhimMoiChillPlugin) : MainAPI() {
         } catch (error: Exception) {}
 
         return mutableListOf<SearchResponse>()
+    }
+
+    private suspend fun getEpisodePlayer(id: String, data: String, callback: (ExtractorLink) -> Unit, name: String = "") {
+        (0..1).forEach { index ->
+            val playerText = app.post(
+                url = "https://phimmoichillv.net/chillsplayer.php",
+                data = mapOf("qcao" to id, "sv" to index.toString()),
+                referer = data,
+                headers = mapOf("Content-Type" to "multipart/form-data"
+                )).text
+
+            var server = ""
+            var linkM3u8 = ""
+            if (playerText.contains("player/sotrym.js")) {
+                server = "#${index + 1} $name - PMFAST"
+
+                val idPlayer = playerText.substringAfter("iniPlayers(\"").substringBefore("\",")
+                linkM3u8 = "https://dash.motchills.net/raw/${idPlayer}/index.m3u8"
+            }
+
+            if (playerText.contains("player/dashstrim.js")) {
+                server = "#${index + 1} $name -  PMHLS (Proxy)"
+
+                val idPlayer = playerText.substringAfter("iniPlayers(\"").substringBefore("\",")
+                val encodedUrl = URLEncoder.encode("https://sotrim.topphimmoi.org/hlspm/${idPlayer}", StandardCharsets.UTF_8.toString())
+
+                linkM3u8 = "${mainUrlProxy}/api/phimmoichill/proxy?url=${encodedUrl}"
+            }
+
+            callback.invoke(
+                ExtractorLink(
+                    server,
+                    server,
+                    linkM3u8,
+                    referer = mainUrl,
+                    quality = Qualities.Unknown.value,
+                    isM3u8 = true
+                )
+            )
+        }
     }
 }
