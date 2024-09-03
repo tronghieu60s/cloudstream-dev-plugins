@@ -12,7 +12,7 @@ class AnimeHayProvider(val plugin: AnimeHayPlugin) : MainAPI() {
     override var lang = "vi"
     override var name = "Anime Hay"
     override var mainUrl = "https://animehay.in"
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+    override val supportedTypes = setOf(TvType.Anime, TvType.AnimeMovie)
 
     override val mainPage = mainPageOf(
         Pair("${mainUrl}/phim-moi-cap-nhap", "Anime Mới/vertical"),

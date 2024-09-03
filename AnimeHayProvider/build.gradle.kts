@@ -1,5 +1,5 @@
 apply(plugin = "org.jetbrains.kotlin.android")
-version = 2
+version = 3
 
 cloudstream {
     status = 1
