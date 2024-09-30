@@ -1,5 +1,16 @@
 **⚠️ This is currently under development, dont use it yet if you're not comfortable with constantly merging new changes**
 
+```js
+Cảnh báo bản quyền:
+ - Đây là dev plugins cho ứng dụng Cloudstream, mục đích để học tập và xem phim nội bộ, chúng tôi không cung cấp Extension này ra ngoài và cũng không hỗ trợ bất kì điều gì.
+ - Bản thân ứng dụng này là không hợp pháp nếu dùng vào mục đích kiếm tiền nào và tôi public ra đây mục tiêu là để học tập, vui lòng không sử dụng vào mục đích kiếm tiền.
+
+Copyright Warning:
+ - This is a development plugin for the Cloudstream application, intended for learning purposes and internal movie viewing. We do not distribute this Extension externally, nor do we provide any support.
+ - The application itself is illegal if used for any commercial purposes. My aim in making this public is for learning purposes only, so please do not use it for making money.
+
+```
+
 # `Cloudstream3 Plugin Repo Template`
 
 Template for a [Cloudstream3](https://github.com/recloudstream) plugin repo
